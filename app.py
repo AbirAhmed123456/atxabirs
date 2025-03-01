@@ -60,7 +60,7 @@ async def send_request(encrypted_uid, token, url):
             'Accept-Encoding': "gzip",
             'Authorization': f"Bearer {token}",
             'Content-Type': "application/x-www-form-urlencoded",
-            'Expect': "100-continue",
+            'Expect': "200-continue",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
             'ReleaseVersion': "OB47"
@@ -132,7 +132,7 @@ async def make_request(encrypt, server_name, token):
             'Accept-Encoding': "gzip",
             'Authorization': f"Bearer {token}",
             'Content-Type': "application/x-www-form-urlencoded",
-            'Expect': "100-continue",
+            'Expect': "200-continue",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
             'ReleaseVersion': "OB47"
