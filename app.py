@@ -91,6 +91,9 @@ async def send_multiple_requests(uid, server_name, url):
         if tokens is None:
             app.logger.error("Failed to load tokens.")
             return None
+        if not tokens:
+            app.logger.error("Token list is empty.")
+            return None
         for i in range(100):
             token = tokens[i % len(tokens)]["token"]
             tasks.append(send_request(encrypted_uid, token, url))
@@ -170,6 +173,8 @@ async def handle_requests():
             tokens = await load_tokens(server_name)
             if tokens is None:
                 return jsonify({"error": "Failed to load tokens."}), 500
+            if not tokens:
+                return jsonify({"error": "Token list is empty."}), 500
 
             token = tokens[0].get("token")
             if not token:
