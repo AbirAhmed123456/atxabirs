@@ -13,6 +13,7 @@ from google.protobuf.message import DecodeError
 
 app = Flask(__name__)
 
+# Function to load tokens from the appropriate file based on the server name
 async def load_tokens(server_name):
     try:
         if server_name == "IND":
@@ -29,6 +30,7 @@ async def load_tokens(server_name):
         app.logger.error(f"Error loading tokens for server {server_name}: {e}")
         return None
 
+# Encrypting message using AES encryption
 def encrypt_message(plaintext):
     try:
         key = b'Yg&tc%DEuh6%Zc^8'
@@ -41,6 +43,7 @@ def encrypt_message(plaintext):
         app.logger.error(f"Error encrypting message: {e}")
         return None
 
+# Function to create protobuf message
 def create_protobuf_message(user_id, region):
     try:
         message = like_pb2.like()
@@ -51,6 +54,7 @@ def create_protobuf_message(user_id, region):
         app.logger.error(f"Error creating protobuf message: {e}")
         return None
 
+# Sending request with encrypted UID and token
 async def send_request(encrypted_uid, token, url):
     try:
         edata = bytes.fromhex(encrypted_uid)
@@ -67,14 +71,21 @@ async def send_request(encrypted_uid, token, url):
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=edata, headers=headers) as response:
+                # Check status code for success
                 if response.status != 200:
-                    app.logger.error(f"Request failed with status code: {response.status}")
+                    app.logger.error(f"Failed to retrieve player info. Status Code: {response.status}")
                     return None
-                return await response.json()  # directly return json response
+                
+                # Print the response text for debugging purposes
+                response_data = await response.text()
+                app.logger.debug(f"Response Data: {response_data}")
+                
+                return await response.json()
     except Exception as e:
-        app.logger.error(f"Exception in send_request: {e}")
+        app.logger.error(f"Error in send_request: {e}")
         return None
 
+# Send multiple requests
 async def send_multiple_requests(uid, server_name, url):
     try:
         region = server_name
@@ -91,9 +102,6 @@ async def send_multiple_requests(uid, server_name, url):
         if tokens is None:
             app.logger.error("Failed to load tokens.")
             return None
-        if not tokens:
-            app.logger.error("Token list is empty.")
-            return None
         for i in range(100):
             token = tokens[i % len(tokens)]["token"]
             tasks.append(send_request(encrypted_uid, token, url))
@@ -103,6 +111,7 @@ async def send_multiple_requests(uid, server_name, url):
         app.logger.error(f"Exception in send_multiple_requests: {e}")
         return None
 
+# Protobuf creation for UID
 def create_protobuf(uid):
     try:
         message = uid_generator_pb2.uid_generator()
@@ -113,6 +122,7 @@ def create_protobuf(uid):
         app.logger.error(f"Error creating uid protobuf: {e}")
         return None
 
+# Encrypt UID
 def enc(uid):
     protobuf_data = create_protobuf(uid)
     if protobuf_data is None:
@@ -120,6 +130,7 @@ def enc(uid):
     encrypted_uid = encrypt_message(protobuf_data)
     return encrypted_uid
 
+# Main API request function
 async def make_request(encrypt, server_name, token):
     try:
         if server_name == "IND":
@@ -142,21 +153,18 @@ async def make_request(encrypt, server_name, token):
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=edata, headers=headers) as response:
-                # Check status code for success
                 if response.status != 200:
                     app.logger.error(f"Failed to retrieve player info. Status Code: {response.status}")
                     return None
-                
-                # Print the response text for debugging purposes
-                response_data = await response.text()  # Read the text content
-                app.logger.debug(f"Response Data: {response_data}")
-                
-                # Now return the JSON data
-                return await response.json()
+
+                hex_data = await response.read()
+                binary = bytes.fromhex(hex_data.decode())
+                return decode_protobuf(binary)
     except Exception as e:
         app.logger.error(f"Error in make_request: {e}")
         return None
 
+# Decode protobuf response
 def decode_protobuf(binary):
     try:
         items = like_count_pb2.Info()
@@ -169,6 +177,7 @@ def decode_protobuf(binary):
         app.logger.error(f"Unexpected error during protobuf decoding: {e}")
         return None
 
+# Flask endpoint to handle 'like' requests
 @app.route('/like', methods=['GET'])
 async def handle_requests():
     uid = request.args.get("uid")
@@ -181,8 +190,6 @@ async def handle_requests():
             tokens = await load_tokens(server_name)
             if tokens is None:
                 return jsonify({"error": "Failed to load tokens."}), 500
-            if not tokens:
-                return jsonify({"error": "Token list is empty."}), 500
 
             token = tokens[0].get("token")
             if not token:
