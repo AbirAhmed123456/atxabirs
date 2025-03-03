@@ -142,8 +142,17 @@ async def make_request(encrypt, server_name, token):
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=edata, headers=headers) as response:
-                response_data = await response.json()  # directly fetch json data from the response
-                return response_data
+                # Check status code for success
+                if response.status != 200:
+                    app.logger.error(f"Failed to retrieve player info. Status Code: {response.status}")
+                    return None
+                
+                # Print the response text for debugging purposes
+                response_data = await response.text()  # Read the text content
+                app.logger.debug(f"Response Data: {response_data}")
+                
+                # Now return the JSON data
+                return await response.json()
     except Exception as e:
         app.logger.error(f"Error in make_request: {e}")
         return None
