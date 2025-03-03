@@ -14,7 +14,14 @@ from google.protobuf.message import DecodeError
 
 app = Flask(__name__)
 
+# AES Encryption Key and IV (Replace with your actual key and IV)
+AES_KEY = b'Yg&tc%DEuh6%Zc^8'
+AES_IV = b'6oyZDr22E3ychjM%'
+
 def load_tokens(server_name):
+    """
+    Load tokens from the appropriate JSON file based on the server name.
+    """
     try:
         if server_name == "IND":
             with open("token_ind.json", "r") as f:
@@ -31,10 +38,11 @@ def load_tokens(server_name):
         return None
 
 def encrypt_message(plaintext):
+    """
+    Encrypt the plaintext using AES encryption.
+    """
     try:
-        key = b'Yg&tc%DEuh6%Zc^8'
-        iv = b'6oyZDr22E3ychjM%'
-        cipher = AES.new(key, AES.MODE_CBC, iv)
+        cipher = AES.new(AES_KEY, AES.MODE_CBC, AES_IV)
         padded_message = pad(plaintext, AES.block_size)
         encrypted_message = cipher.encrypt(padded_message)
         return binascii.hexlify(encrypted_message).decode('utf-8')
@@ -43,6 +51,9 @@ def encrypt_message(plaintext):
         return None
 
 def create_protobuf_message(user_id, region):
+    """
+    Create a protobuf message for the like request.
+    """
     try:
         message = like_pb2.like()
         message.uid = int(user_id)
@@ -53,6 +64,9 @@ def create_protobuf_message(user_id, region):
         return None
 
 async def send_request(encrypted_uid, token, url):
+    """
+    Send an asynchronous request to the game server.
+    """
     try:
         edata = bytes.fromhex(encrypted_uid)
         headers = {
@@ -77,6 +91,9 @@ async def send_request(encrypted_uid, token, url):
         return None
 
 async def send_multiple_requests(uid, server_name, url):
+    """
+    Send multiple asynchronous requests to the game server.
+    """
     try:
         region = server_name
         protobuf_message = create_protobuf_message(uid, region)
@@ -102,6 +119,9 @@ async def send_multiple_requests(uid, server_name, url):
         return None
 
 def create_protobuf(uid):
+    """
+    Create a protobuf message for the UID.
+    """
     try:
         message = uid_generator_pb2.uid_generator()
         message.saturn_ = int(uid)
@@ -112,6 +132,9 @@ def create_protobuf(uid):
         return None
 
 def enc(uid):
+    """
+    Encrypt the UID.
+    """
     protobuf_data = create_protobuf(uid)
     if protobuf_data is None:
         return None
@@ -119,6 +142,9 @@ def enc(uid):
     return encrypted_uid
 
 def make_request(encrypt, server_name, token):
+    """
+    Make a request to the game server to retrieve player info.
+    """
     try:
         if server_name == "IND":
             url = "https://client.ind.freefiremobile.com/GetPlayerPersonalShow"
@@ -139,17 +165,12 @@ def make_request(encrypt, server_name, token):
             'X-GA': "v1 1",
             'ReleaseVersion': "OB47"
         }
-
-        # Send request and log the response
         response = requests.post(url, data=edata, headers=headers, verify=False)
-
-        app.logger.info(f"Response status code: {response.status_code}")
-        app.logger.info(f"Response text: {response.text}")
-
-        if response.status_code != 200:
-            app.logger.error(f"Request failed with status code: {response.status_code}")
-            return None
-
+        
+        # Log the response for debugging
+        app.logger.info(f"Response Status Code: {response.status_code}")
+        app.logger.info(f"Response Content: {response.content}")
+        
         hex_data = response.content.hex()
         binary = bytes.fromhex(hex_data)
         decode = decode_protobuf(binary)
@@ -161,6 +182,9 @@ def make_request(encrypt, server_name, token):
         return None
 
 def decode_protobuf(binary):
+    """
+    Decode the protobuf binary data.
+    """
     try:
         items = like_count_pb2.Info()
         items.ParseFromString(binary)
@@ -174,6 +198,9 @@ def decode_protobuf(binary):
 
 @app.route('/like', methods=['GET'])
 def handle_requests():
+    """
+    Handle the /like route.
+    """
     uid = request.args.get("uid")
     server_name = request.args.get("server_name", "").upper()
     if not uid or not server_name:
@@ -189,17 +216,14 @@ def handle_requests():
             if encrypted_uid is None:
                 raise Exception("Encryption of UID failed.")
 
-            # Get initial player data before like action
+            # Get player info before sending like requests
             before = make_request(encrypted_uid, server_name, token)
             if before is None:
                 raise Exception("Failed to retrieve initial player info.")
-            
             try:
                 jsone = MessageToJson(before)
-                app.logger.info(f"Before Protobuf to JSON: {jsone}")
             except Exception as e:
                 raise Exception(f"Error converting 'before' protobuf to JSON: {e}")
-
             data_before = json.loads(jsone)
             before_like = data_before.get('AccountInfo', {}).get('Likes', 0)
             try:
@@ -208,7 +232,7 @@ def handle_requests():
                 before_like = 0
             app.logger.info(f"Likes before command: {before_like}")
 
-            # Set URL for like request
+            # Determine the like URL based on the server name
             if server_name == "IND":
                 url = "https://client.ind.freefiremobile.com/LikeProfile"
             elif server_name in {"BR", "US", "SAC", "NA"}:
@@ -219,24 +243,20 @@ def handle_requests():
             # Send like requests asynchronously
             asyncio.run(send_multiple_requests(uid, server_name, url))
 
-            # Get player data after like action
+            # Get player info after sending like requests
             after = make_request(encrypted_uid, server_name, token)
             if after is None:
                 raise Exception("Failed to retrieve player info after like requests.")
-            
             try:
                 jsone_after = MessageToJson(after)
-                app.logger.info(f"After Protobuf to JSON: {jsone_after}")
             except Exception as e:
                 raise Exception(f"Error converting 'after' protobuf to JSON: {e}")
-
             data_after = json.loads(jsone_after)
             after_like = int(data_after.get('AccountInfo', {}).get('Likes', 0))
             player_uid = int(data_after.get('AccountInfo', {}).get('UID', 0))
             player_name = str(data_after.get('AccountInfo', {}).get('PlayerNickname', ''))
             like_given = after_like - before_like
             status = 1 if like_given != 0 else 2
-
             result = {
                 "LikesGivenByAPI": like_given,
                 "LikesafterCommand": after_like,
