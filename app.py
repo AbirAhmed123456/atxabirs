@@ -69,8 +69,8 @@ async def send_request(encrypted_uid, token, url):
             async with session.post(url, data=edata, headers=headers) as response:
                 if response.status != 200:
                     app.logger.error(f"Request failed with status code: {response.status}")
-                    return response.status
-                return await response.text()
+                    return None
+                return await response.json()  # directly return json response
     except Exception as e:
         app.logger.error(f"Exception in send_request: {e}")
         return None
@@ -142,9 +142,8 @@ async def make_request(encrypt, server_name, token):
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=edata, headers=headers) as response:
-                hex_data = await response.read()
-                binary = bytes.fromhex(hex_data.decode())
-                return decode_protobuf(binary)
+                response_data = await response.json()  # directly fetch json data from the response
+                return response_data
     except Exception as e:
         app.logger.error(f"Error in make_request: {e}")
         return None
@@ -226,12 +225,12 @@ async def handle_requests():
                     "UID": player_uid,
                     "status": status
                 }
-                return result
+                return jsonify(result)
             except Exception as e:
                 return jsonify({"error": f"Error processing after-like data: {e}"}), 500
 
         result = await process_request()
-        return jsonify(result)
+        return result
 
     except Exception as e:
         app.logger.error(f"Error processing request: {e}")
