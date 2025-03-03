@@ -126,6 +126,7 @@ def make_request(encrypt, server_name, token):
             url = "https://client.us.freefiremobile.com/GetPlayerPersonalShow"
         else:
             url = "https://clientbp.ggblueshark.com/GetPlayerPersonalShow"
+
         edata = bytes.fromhex(encrypt)
         headers = {
             'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)",
@@ -138,7 +139,17 @@ def make_request(encrypt, server_name, token):
             'X-GA': "v1 1",
             'ReleaseVersion': "OB47"
         }
+
+        # Send request and check response
         response = requests.post(url, data=edata, headers=headers, verify=False)
+
+        app.logger.info(f"Response status code: {response.status_code}")
+        app.logger.info(f"Response text: {response.text}")
+
+        if response.status_code != 200:
+            app.logger.error(f"Request failed with status code: {response.status_code}")
+            return None
+
         hex_data = response.content.hex()
         binary = bytes.fromhex(hex_data)
         decode = decode_protobuf(binary)
